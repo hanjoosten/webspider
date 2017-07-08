@@ -31,8 +31,6 @@ processPage url = do
 nofollow :: Tag String -> Bool
 nofollow tag = fromAttrib "rel" tag == "nofollow"
 
---process :: String -> [String]
-process = undefined -- links
 
 links :: String -> String -> [String]
 links url =
