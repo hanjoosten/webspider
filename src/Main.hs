@@ -1,19 +1,22 @@
-module Main where
-
-import Data.ByteString.Lazy.UTF8
+module Main (main) where
+    
+import qualified Data.ByteString.Lazy.UTF8 as BS
+import Control.Exception.Base
+import qualified Data.Map as Map
 import Data.Maybe
+import qualified Data.Set as Set
 import Network.HTTP.Conduit
 import Network.URI
 import Text.HTML.TagSoup
 
 main :: IO ()
 main = do
-  putStrLn "hello world"
-
+  results <- spider 1000 "http://haskell.org"
+  mapM_ putStrLn $ printMap results 
 
 download :: String -> IO String
 download url = do res <- simpleHttp url
-                  return (toString res)
+                  return (BS.toString res)
 
 saveAs :: String -> Int -> IO ()
 saveAs url k =
@@ -90,3 +93,56 @@ process' url =
    filter (isTagOpenName "a") .
    canonicalizeTags .
    parseTags
+
+
+data Link = Link { linkTo   :: String
+                 , linkFrom :: [String]
+                 } 
+
+visited :: String -> [Link] -> Bool
+visited url = elem url . map linkTo  --Traag bij veel links!
+
+type URL = String
+
+spider :: Int -> URL -> IO (Map.Map URL [URL])
+spider count url0 = go 0 Map.empty (Set.singleton url0)
+  where
+    go k seen queue0
+        | k >= count = return seen
+        | otherwise  =
+      case Set.minView queue0 of
+        Nothing -> return seen
+        Just (url, queue) -> do
+          -- putStrLn ("Start downloading "++url)
+          page' <- safeDownload url
+          case page' of 
+            Left err -> 
+               do putStrLn ("failed to download "++url)
+                  putStrLn ("   "++showException err)
+                  go k seen queue
+            Right page ->
+               do putStrLn (show k ++") "++url)
+                  let ls       = links url page
+                      newSeen  = Map.insert url ls seen
+                      notSeen  = Set.fromList .
+                                    filter (`Map.notMember` newSeen) $ ls
+                      newQueue = queue `Set.union` notSeen
+                  go (k+1) newSeen newQueue
+
+printMap ::  (Show k , Show v) => Map.Map k v -> [String]
+printMap = map printRow . Map.toList
+  where
+    printRow (k,v) = show k ++ ", "++show v
+
+safeDownload :: String -> IO (Either HttpException String )
+safeDownload url = try (download url)
+
+showException :: HttpException -> String
+showException e =
+  case e of 
+    HttpExceptionRequest _ x ->
+      case x of 
+        StatusCodeException resp _ 
+           -> show . responseStatus $ resp
+        _ -> show x
+    InvalidUrlException _ reason   -> "Invalid url ("++reason++")" 
