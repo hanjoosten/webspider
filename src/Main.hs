@@ -11,7 +11,7 @@ import Text.HTML.TagSoup
 
 main :: IO ()
 main = do
-  results <- spider 1000 "http://haskell.org"
+  results <- spider 10 "http://haskell.org"
   mapM_ putStrLn $ printMap results 
 
 download :: String -> IO String
